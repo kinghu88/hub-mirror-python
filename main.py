@@ -1,3 +1,5 @@
+import argparse
+
 import docker
 import json
 from docker.errors import APIError
@@ -11,11 +13,11 @@ def load_mirrors(file_path):
     return data.get('hub-mirror', [])
 
 
-def authenticate(docker_client, username, password, registry):
+def authenticate(docker_client, username, password, repository):
     auth_config = docker_client.login(
         username=username,
         password=password,
-        registry=registry,
+        repository=repository,
         reauth=True  # 重新授权，如果之前已经登录
     )
     # 登录后，docker-py会自动处理后续的RegistryAuth
@@ -40,21 +42,32 @@ def pull_retag_push(docker_client, source, target, auth_str=None):
         print(f"Error processing {source}: {e}")
 
 
-def main(mirror_file, username, password, registry):
+#def main(mirror_file, username, password, registry):
+def main(mirror_file):
+    # 创建ArgumentParser对象
+    parser = argparse.ArgumentParser(description='My Python script')
+
+    # 添加参数
+    parser.add_argument('--username', type=str, required=True, help='Username')
+    parser.add_argument('--password', type=str, required=True, help='Password')
+    parser.add_argument('--repository', type=str, required=True, help='Repository')
+
+    # 解析参数
+    args = parser.parse_args()
     docker_client = docker.from_env()
 
     # 加载镜像列表
     mirrors = load_mirrors(mirror_file)
 
     # 认证（如果需要）
-    if username and password:
-        auth_config = authenticate(docker_client, username, password, registry)
+    if args.username and args.password:
+        auth_config = authenticate(docker_client, args.username, args.password, args.repository)
         # 将认证信息转换为base64字符串（尽管docker-py通常会自动处理）
         # 但如果我们需要手动传递它（例如，在某些Docker API调用中），可以这样做
         # 注意：这里的auth_str实际上在push时可能不需要，因为docker-py会处理它
-        auth_str = base64.b64encode(f"{username}:{password}".encode()).decode()
-    else:
-        auth_str = None
+    #     auth_str = base64.b64encode(f"{username}:{password}".encode()).decode()
+    # else:
+    #     auth_str = None
 
     # 处理每个镜像
     for mirror in mirrors:
@@ -62,22 +75,20 @@ def main(mirror_file, username, password, registry):
             continue
 
         # 构建目标镜像名
-        if not registry:
-            target = f"{username}/{mirror.replace('/', '.')}"
+        if not args.repository:
+            target = f"{args.username}/{mirror.replace('/', '.')}"
         else:
-            target = f"{registry}/{mirror.replace('/', '.')}"
+            target = f"{args.repository}/{mirror.replace('/', '.')}"
 
         # 执行拉取、重新打标签和推送操作
-        pull_retag_push(docker_client, mirror, target, auth_str)
-
-    # 这里可以添加生成脚本文件的代码
-    # ...
+        pull_retag_push(docker_client, mirror, target, auth_config)
+        # pull_retag_push(docker_client, mirror, target, auth_str)
 
 
 if __name__ == "__main__":
     # 假设这些参数通过某种方式（如命令行参数）提供
     mirror_file = 'mirrors.json'
-    username = 'your_username'
-    password = 'your_password'
-    registry = 'your_registry'
-    main(mirror_file, username, password, registry)
+    # username = 'your_username'
+    # password = 'your_password'
+    # registry = 'your_registry'
+    main(mirror_file)
