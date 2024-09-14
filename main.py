@@ -7,9 +7,8 @@ import base64
 import os
 
 
-def load_mirrors(file_path):
-    with open(file_path, 'r') as file:
-        data = json.load(file)
+def load_mirrors(content):
+    data = json.load(content)
     return data.get('hub-mirror', [])
 
 
@@ -42,26 +41,16 @@ def pull_retag_push(docker_client, source, target, auth_str=None):
         print(f"Error processing {source}: {e}")
 
 
-#def main(mirror_file, username, password, registry):
-def main(mirror_file):
-    # 创建ArgumentParser对象
-    parser = argparse.ArgumentParser(description='My Python script')
+def main(content, username, password, repository):
 
-    # 添加参数
-    parser.add_argument('--username', type=str, required=True, help='Username')
-    parser.add_argument('--password', type=str, required=True, help='Password')
-    parser.add_argument('--repository', type=str, required=True, help='Repository')
-
-    # 解析参数
-    args = parser.parse_args()
     docker_client = docker.from_env()
 
     # 加载镜像列表
-    mirrors = load_mirrors(mirror_file)
+    mirrors = load_mirrors(content)
 
     # 认证（如果需要）
-    if args.username and args.password:
-        auth_config = authenticate(docker_client, args.username, args.password, args.repository)
+    if username and password:
+        auth_config = authenticate(docker_client, username, password, repository)
         # 将认证信息转换为base64字符串（尽管docker-py通常会自动处理）
         # 但如果我们需要手动传递它（例如，在某些Docker API调用中），可以这样做
         # 注意：这里的auth_str实际上在push时可能不需要，因为docker-py会处理它
@@ -75,10 +64,10 @@ def main(mirror_file):
             continue
 
         # 构建目标镜像名
-        if not args.repository:
-            target = f"{args.username}/{mirror.replace('/', '.')}"
+        if not repository:
+            target = f"{username}/{mirror.replace('/', '.')}"
         else:
-            target = f"{args.repository}/{mirror.replace('/', '.')}"
+            target = f"{repository}/{mirror.replace('/', '.')}"
 
         # 执行拉取、重新打标签和推送操作
         pull_retag_push(docker_client, mirror, target, auth_config)
@@ -86,9 +75,15 @@ def main(mirror_file):
 
 
 if __name__ == "__main__":
-    # 假设这些参数通过某种方式（如命令行参数）提供
-    mirror_file = 'mirrors.json'
-    # username = 'your_username'
-    # password = 'your_password'
-    # registry = 'your_registry'
-    main(mirror_file)
+    # 创建ArgumentParser对象
+    parser = argparse.ArgumentParser(description='My Python script')
+
+    # 添加参数
+    parser.add_argument('--username', type=str, required=True, help='Username')
+    parser.add_argument('--password', type=str, required=True, help='Password')
+    parser.add_argument('--repository', type=str, required=True, help='Repository')
+    parser.add_argument('--content', type=str, required=True, help='content')
+
+    # 解析参数
+    args = parser.parse_args()
+    main(args.content, args.username, args.password, args.repository)
